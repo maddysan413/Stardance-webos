@@ -1,1 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEDGER — Personal Finance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#0B1E2D;
+    --panel:#102A3D;
+    --panel-light:#16374D;
+    --gold:#C9A227;
+    --gold-bright:#E8C766;
+    --cream:#F2E9D8;
+    --mint:#4FD1A5;
+    --coral:#E2654A;
+    --line: rgba(242,233,216,0.14);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink);
+    color:var(--cream);
+    font-family:'IBM Plex Mono', monospace;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .serif{font-family:'Fraunces', serif;}
 
+  /* ---------- Ticker ---------- */
+  .ticker-bar{
+    background:var(--gold);
+    color:var(--ink);
+    overflow:hidden;
+    white-space:nowrap;
+    border-bottom:2px solid var(--ink);
+    font-weight:600;
+    font-size:13px;
+    letter-spacing:0.04em;
+  }
+  .ticker-track{
+    display:inline-block;
+    padding-left:100%;
+    animation:scroll-ticker 32s linear infinite;
+  }
+  .ticker-track span{ margin-right:48px; }
+  .tick-up{color:#0B1E2D;}
+  .tick-up::before{content:"▲ "; color:#1f6b4a;}
+  .tick-down::before{content:"▼ "; color:#7a1f10;}
+  @keyframes scroll-ticker{
+    0%{ transform:translateX(0); }
+    100%{ transform:translateX(-100%); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .ticker-track{ animation:none; padding-left:0; }
+  }
+
+  /* ---------- Layout shell ---------- */
+  .wrap{
+    max-width:1080px;
+    margin:0 auto;
+    padding:36px 24px 80px;
+  }
+  header.masthead{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    border-bottom:3px double var(--gold);
+    padding-bottom:18px;
+    margin-bottom:32px;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .brand{
+    font-family:'Fraunces', serif;
+    font-size:34px;
+    font-weight:700;
+    letter-spacing:0.02em;
+    color:var(--gold-bright);
+  }
+  .brand sup{
+    font-size:11px;
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--cream);
+    opacity:0.6;
+    letter-spacing:0.15em;
+    margin-left:8px;
+    vertical-align:middle;
+  }
+  .date-stamp{
+    font-size:12px;
+    letter-spacing:0.08em;
+    opacity:0.7;
+    text-align:right;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero-grid{
+    display:grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap:28px;
+    margin-bottom:36px;
+  }
+  @media (max-width:760px){ .hero-grid{ grid-template-columns:1fr; } }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:26px;
+    position:relative;
+  }
+  .panel::before{
+    content:"";
+    position:absolute;
+    inset:6px;
+    border:1px solid var(--line);
+    border-radius:2px;
+    pointer-events:none;
+  }
+  .eyebrow{
+    font-size:11px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--gold);
+    margin-bottom:10px;
+  }
+  .net-worth-figure{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:56px;
+    line-height:1;
+    color:var(--cream);
+    margin:4px 0 6px;
+  }
+  .net-worth-sub{
+    font-size:13px;
+    color:var(--mint);
+  }
+  .net-worth-sub.negative{ color:var(--coral); }
+
+  .quick-stats{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+    margin-top:24px;
+  }
+  .stat{
+    border-top:1px dashed var(--line);
+    padding-top:10px;
+  }
+  .stat .label{ font-size:10.5px; letter-spacing:0.08em; opacity:0.65; text-transform:uppercase;}
+  .stat .value{ font-family:'Fraunces', serif; font-size:20px; margin-top:4px; }
+  .stat .value.coral{ color:var(--coral); }
+  .stat .value.mint{ color:var(--mint); }
+
+  /* ---------- Chart panel ---------- */
+  .chart-panel canvas{ max-height:200px; }
+  .legend-list{
+    margin-top:16px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .legend-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    font-size:12.5px;
+  }
+  .legend-row .swatch{
+    width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:8px;
+  }
+  .legend-row .name{ display:flex; align-items:center; opacity:0.9; }
+  .legend-row .amt{ font-weight:600; }
+
+  /* ---------- Ledger table ---------- */
+  .ledger-panel{ margin-bottom:36px; }
+  .ledger-panel h2{
+    font-family:'Fraunces', serif;
+    font-size:20px;
+    margin:0 0 18px;
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+  .ledger-panel h2 .count{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    opacity:0.55;
+    letter-spacing:0.05em;
+  }
+
+  .ledger-row{
+    display:grid;
+    grid-template-columns: 90px 1fr 110px 110px;
+    align-items:center;
+    gap:10px;
+    padding:10px 2px;
+    border-bottom:1px dotted var(--line);
+    font-size:13px;
+  }
+  .ledger-row.head{
+    font-size:10.5px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    opacity:0.55;
+    border-bottom:1px solid var(--line);
+  }
+  .ledger-row .cat-dot{
+    width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:7px;
+  }
+  .ledger-row .amount{ text-align:right; font-weight:600; }
+  .ledger-row .amount.income{ color:var(--mint); }
+  .ledger-row .amount.expense{ color:var(--coral); }
+  .ledger-row .del{
+    text-align:right;
+    opacity:0.35;
+    cursor:pointer;
+    font-size:12px;
+    transition:opacity .15s;
+  }
+  .ledger-row .del:hover{ opacity:1; color:var(--coral); }
+  .ledger-rows-wrap{ max-height:320px; overflow-y:auto; }
+  .ledger-rows-wrap::-webkit-scrollbar{ width:6px; }
+  .ledger-rows-wrap::-webkit-scrollbar-thumb{ background:var(--panel-light); border-radius:3px; }
+
+  /* ---------- Add entry form ---------- */
+  .entry-form{
+    display:grid;
+    grid-template-columns: 110px 1fr 130px 110px auto;
+    gap:10px;
+    margin-top:18px;
+  }
+  @media (max-width:760px){ .entry-form{ grid-template-columns:1fr 1fr; } }
+  .entry-form input, .entry-form select{
+    background:var(--panel-light);
+    border:1px solid var(--line);
+    color:var(--cream);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    padding:9px 10px;
+    border-radius:3px;
+    outline:none;
+  }
+  .entry-form input:focus, .entry-form select:focus{
+    border-color:var(--gold);
+    box-shadow:0 0 0 2px rgba(201,162,39,0.25);
+  }
+  .entry-form button{
+    background:var(--gold);
+    color:var(--ink);
+    border:none;
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600;
+    font-size:12.5px;
+    letter-spacing:0.04em;
+    border-radius:3px;
+    cursor:pointer;
+    padding:9px 16px;
+    transition:background .15s, transform .1s;
+  }
+  .entry-form button:hover{ background:var(--gold-bright); }
+  .entry-form button:active{ transform:translateY(1px); }
+  .entry-form button:focus-visible, .entry-form input:focus-visible, .entry-form select:focus-visible{
+    outline:2px solid var(--gold-bright);
+    outline-offset:2px;
+  }
+
+  /* ---------- Savings goal stamp ---------- */
+  .goal-panel{
+    display:flex;
+    gap:26px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .stamp{
+    flex:0 0 auto;
+    width:120px;height:120px;
+    border:3px solid var(--gold);
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    transform:rotate(-8deg);
+    position:relative;
+  }
+  .stamp::after{
+    content:"";
+    position:absolute; inset:8px;
+    border:1px dashed var(--gold);
+    border-radius:50%;
+  }
+  .stamp .pct{
+    font-family:'Fraunces', serif;
+    font-size:28px;
+    color:var(--gold-bright);
+  }
+  .stamp .lbl{
+    font-size:9px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    opacity:0.75;
+    margin-top:2px;
+  }
+  .goal-info{ flex:1; min-width:220px; }
+  .goal-bar-track{
+    background:var(--panel-light);
+    height:10px;
+    border-radius:5px;
+    overflow:hidden;
+    margin:12px 0 8px;
+  }
+  .goal-bar-fill{
+    height:100%;
+    background:linear-gradient(90deg, var(--gold), var(--mint));
+    border-radius:5px;
+    transition:width .5s ease;
+  }
+  .goal-meta{ display:flex; justify-content:space-between; font-size:12px; opacity:0.75; }
+
+  footer{
+    text-align:center;
+    font-size:11px;
+    opacity:0.4;
+    letter-spacing:0.08em;
+    margin-top:50px;
+  }
+</style>
+</head>
+<body>
+
+<div class="ticker-bar">
+  <div class="ticker-track" id="tickerTrack"></div>
+</div>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="brand">LEDGER<sup>EST. PERSONAL FINANCE</sup></div>
+    <div class="date-stamp" id="dateStamp"></div>
+  </header>
+
+  <div class="hero-grid">
+    <div class="panel">
+      <div class="eyebrow">Net Worth</div>
+      <div class="net-worth-figure" id="netWorthFigure">$0.00</div>
+      <div class="net-worth-sub" id="netWorthSub">—</div>
+      <div class="quick-stats">
+        <div class="stat">
+          <div class="label">Income (mo)</div>
+          <div class="value mint" id="statIncome">$0</div>
+        </div>
+        <div class="stat">
+          <div class="label">Expenses (mo)</div>
+          <div class="value coral" id="statExpenses">$0</div>
+        </div>
+        <div class="stat">
+          <div class="label">Savings Rate</div>
+          <div class="value" id="statRate">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel chart-panel">
+      <div class="eyebrow">Spending by Category</div>
+      <canvas id="categoryChart" height="180"></canvas>
+      <div class="legend-list" id="legendList"></div>
+    </div>
+  </div>
+
+  <div class="panel ledger-panel">
+    <h2>Transaction Ledger <span class="count" id="rowCount"></span></h2>
+
+    <div class="ledger-row head">
+      <span>Date</span><span>Description</span><span>Category</span><span style="text-align:right;">Amount</span>
+    </div>
+    <div class="ledger-rows-wrap" id="ledgerRows"></div>
+
+    <form class="entry-form" id="entryForm">
+      <input type="date" id="inpDate" required>
+      <input type="text" id="inpDesc" placeholder="Description" required>
+      <select id="inpCat">
+        <option value="Income">Income</option>
+        <option value="Housing">Housing</option>
+        <option value="Food">Food</option>
+        <option value="Transport">Transport</option>
+        <option value="Leisure">Leisure</option>
+        <option value="Other">Other</option>
+      </select>
+      <input type="number" id="inpAmt" placeholder="Amount" step="0.01" required>
+      <button type="submit">Add Entry</button>
+    </form>
+  </div>
+
+  <div class="panel goal-panel">
+    <div class="stamp">
+      <div class="pct" id="goalPct">0%</div>
+      <div class="lbl">funded</div>
+    </div>
+    <div class="goal-info">
+      <div class="eyebrow">Savings Goal — Emergency Fund</div>
+      <div class="goal-bar-track"><div class="goal-bar-fill" id="goalBarFill" style="width:0%"></div></div>
+      <div class="goal-meta">
+        <span id="goalSaved">$0 saved</span>
+        <span id="goalTarget">of $0 target</span>
+      </div>
+    </div>
+  </div>
+
+  <footer>LEDGER — A QUIET PLACE FOR YOUR NUMBERS</footer>
+</div>
+
+<script>
+/* ---------------- In-memory state ---------------- */
+const CATEGORY_COLORS = {
+  Housing:  '#C9A227',
+  Food:     '#4FD1A5',
+  Transport:'#5FA8D3',
+  Leisure:  '#E2654A',
+  Other:    '#9B8AC4'
+};
+
+let transactions = [
+  { date:'2026-06-01', desc:'Paycheck',            cat:'Income',    amt: 4200.00 },
+  { date:'2026-06-02', desc:'Rent',                cat:'Housing',   amt:-1450.00 },
+  { date:'2026-06-04', desc:'Groceries — Trader Joes', cat:'Food',  amt:-86.40  },
+  { date:'2026-06-05', desc:'Metro pass',          cat:'Transport', amt:-90.00  },
+  { date:'2026-06-08', desc:'Concert tickets',     cat:'Leisure',   amt:-120.00 },
+  { date:'2026-06-10', desc:'Electric bill',       cat:'Housing',   amt:-74.30  },
+  { date:'2026-06-12', desc:'Dinner out',          cat:'Food',      amt:-58.10  },
+  { date:'2026-06-15', desc:'Freelance payment',   cat:'Income',    amt: 600.00 },
+  { date:'2026-06-17', desc:'Gym membership',      cat:'Leisure',   amt:-45.00  },
+];
+
+const SAVINGS_GOAL = { target: 10000, saved: 6450 };
+
+let chartInstance = null;
+
+/* ---------------- Helpers ---------------- */
+function fmt(n){
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtShort(n){
+  return '$' + Math.abs(Math.round(n)).toLocaleString();
+}
+
+/* ---------------- Render: ticker ---------------- */
+function renderTicker(){
+  const byCat = groupByCategory();
+  const items = Object.entries(byCat).map(([cat, total]) => {
+    const up = total >= 0;
+    return `<span class="${up ? 'tick-up':'tick-down'}">${cat} ${fmtShort(total)}</span>`;
+  });
+  document.getElementById('tickerTrack').innerHTML = items.concat(items).join('');
+}
+
+/* ---------------- Render: hero stats ---------------- */
+function renderStats(){
+  const income = transactions.filter(t => t.amt > 0).reduce((s,t)=>s+t.amt,0);
+  const expenses = transactions.filter(t => t.amt < 0).reduce((s,t)=>s+t.amt,0);
+  const net = income + expenses;
+  const rate = income > 0 ? Math.round(((income+expenses)/income)*100) : 0;
+
+  document.getElementById('netWorthFigure').textContent = fmt(net);
+  const sub = document.getElementById('netWorthSub');
+  sub.textContent = (net >= 0 ? '▲ ' : '▼ ') + 'this period';
+  sub.className = 'net-worth-sub' + (net < 0 ? ' negative' : '');
+
+  document.getElementById('statIncome').textContent = fmt(income);
+  document.getElementById('statExpenses').textContent = fmt(Math.abs(expenses));
+  document.getElementById('statRate').textContent = rate + '%';
+}
+
+/* ---------------- Render: category chart ---------------- */
+function groupByCategory(){
+  const out = {};
+  transactions.forEach(t => {
+    out[t.cat] = (out[t.cat]||0) + t.amt;
+  });
+  return out;
+}
+
+function renderChart(){
+  const expenseByCat = {};
+  transactions.filter(t=>t.amt<0).forEach(t=>{
+    expenseByCat[t.cat] = (expenseByCat[t.cat]||0) + Math.abs(t.amt);
+  });
+  const labels = Object.keys(expenseByCat);
+  const data = Object.values(expenseByCat);
+  const colors = labels.map(l => CATEGORY_COLORS[l] || '#888');
+
+  const ctx = document.getElementById('categoryChart').getContext('2d');
+  if(chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderColor:'#102A3D', borderWidth:2 }]},
+    options:{
+      cutout:'68%',
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: (c)=> c.label+': '+fmt(c.parsed) } } }
+    }
+  });
+
+  const total = data.reduce((a,b)=>a+b,0) || 1;
+  document.getElementById('legendList').innerHTML = labels.map((l,i)=>{
+    const pct = Math.round((data[i]/total)*100);
+    return `<div class="legend-row">
+      <span class="name"><span class="swatch" style="background:${colors[i]}"></span>${l}</span>
+      <span class="amt">${fmtShort(data[i])} · ${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+/* ---------------- Render: ledger rows ---------------- */
+function renderLedger(){
+  const sorted = [...transactions].sort((a,b)=> new Date(b.date) - new Date(a.date));
+  document.getElementById('rowCount').textContent = `(${sorted.length} entries)`;
+  document.getElementById('ledgerRows').innerHTML = sorted.map((t, idx) => {
+    const realIdx = transactions.indexOf(t);
+    const isIncome = t.amt >= 0;
+    const dot = CATEGORY_COLORS[t.cat] || (isIncome ? '#4FD1A5' : '#888');
+    return `<div class="ledger-row">
+      <span>${t.date.slice(5)}</span>
+      <span>${t.desc}</span>
+      <span><span class="cat-dot" style="background:${dot}"></span>${t.cat}</span>
+      <span class="amount ${isIncome?'income':'expense'}">${fmt(t.amt)}
+        <span class="del" data-idx="${realIdx}" title="Delete entry">✕</span>
+      </span>
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('.del').forEach(el=>{
+    el.addEventListener('click', (e)=>{
+      const i = parseInt(e.currentTarget.dataset.idx, 10);
+      transactions.splice(i,1);
+      renderAll();
+    });
+  });
+}
+
+/* ---------------- Render: savings goal ---------------- */
+function renderGoal(){
+  const pct = Math.min(100, Math.round((SAVINGS_GOAL.saved/SAVINGS_GOAL.target)*100));
+  document.getElementById('goalPct').textContent = pct + '%';
+  document.getElementById('goalBarFill').style.width = pct + '%';
+  document.getElementById('goalSaved').textContent = fmtShort(SAVINGS_GOAL.saved) + ' saved';
+  document.getElementById('goalTarget').textContent = 'of ' + fmtShort(SAVINGS_GOAL.target) + ' target';
+}
+
+/* ---------------- Date stamp ---------------- */
+function renderDateStamp(){
+  const d = new Date();
+  document.getElementById('dateStamp').textContent =
+    d.toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' }).toUpperCase();
+}
+
+/* ---------------- Master render ---------------- */
+function renderAll(){
+  renderTicker();
+  renderStats();
+  renderChart();
+  renderLedger();
+  renderGoal();
+}
+
+/* ---------------- Form handling ---------------- */
+document.getElementById('entryForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const date = document.getElementById('inpDate').value;
+  const desc = document.getElementById('inpDesc').value.trim();
+  const cat  = document.getElementById('inpCat').value;
+  let amt = parseFloat(document.getElementById('inpAmt').value);
+  if(!date || !desc || isNaN(amt)) return;
+  if(cat !== 'Income' && amt > 0) amt = -amt;
+  transactions.push({ date, desc, cat, amt });
+  e.target.reset();
+  renderAll();
+});
+
+/* ---------------- Init ---------------- */
+renderDateStamp();
+renderAll();
+</script>
+</body>
+</html>
